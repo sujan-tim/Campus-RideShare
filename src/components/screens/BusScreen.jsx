@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Btn, Sheet, Tag } from '../ui';
+import { BackBtn, Btn, Sheet, Tag } from '../ui';
 import { C, FONTS, RADIUS, SHADOW } from '../../constants/theme';
 import { RUTGERS_TRANSIT_OFFICIAL_URL, RUTGERS_TRANSIT_POLL_MS } from '../../constants/transit';
 import { fetchTransitBootstrap, fetchTransitPredictions, fetchTransitVehicles, getRutgersTransitConfig } from '../../services/rutgersTransit';
@@ -209,7 +209,7 @@ function StopSheet({ stop, predictions, onClose }) {
   );
 }
 
-export default function BusScreen() {
+export default function BusScreen({ onBack }) {
   const transitConfig = getRutgersTransitConfig();
   const [bootstrap, setBootstrap] = useState({ routes: [], stops: [], alerts: [], source: 'loading', lastUpdated: null });
   const [vehicles, setVehicles] = useState([]);
@@ -340,6 +340,9 @@ export default function BusScreen() {
       {selectedStop && <StopSheet stop={selectedStop} predictions={predictions} onClose={() => setSelectedStop(null)}/>}
 
       <div style={{ background: 'linear-gradient(180deg, #111111 0%, #1e1e1e 100%)', padding: '56px 20px 22px', color: C.white }}>
+        <div style={{ marginBottom: '14px' }}>
+          <BackBtn onClick={onBack}/>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '16px' }}>
           <div>
             <p style={{ margin: '0 0 4px', fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>Rutgers Transit</p>

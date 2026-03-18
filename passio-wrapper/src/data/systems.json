@@ -1,0 +1,13 @@
+[
+  {
+    "id": "rutgers-nb",
+    "name": "Rutgers University",
+    "shortName": "Rutgers",
+    "campus": "New Brunswick"
+  },
+  {
+    "id": "city-sample",
+    "name": "Sample City Transit",
+    "shortName": "Sample"
+  }
+]

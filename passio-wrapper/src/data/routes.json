@@ -1,0 +1,5 @@
+[
+  { "id": "a", "name": "A Route", "shortName": "A", "groupColor": "#CC0033" },
+  { "id": "lx", "name": "Livingston Express", "shortName": "LX", "groupColor": "#111111" },
+  { "id": "rexb", "name": "Busch Express", "shortName": "REXB", "groupColor": "#0A84FF" }
+]

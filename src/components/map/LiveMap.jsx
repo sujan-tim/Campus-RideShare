@@ -413,6 +413,14 @@ export function LiveMap({
     }
   }, [activeDriverLocation, activeRiderLocation, fromCampus, routePath, toCampus, traveledRoutePath]);
 
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const timer = setTimeout(() => {
+      mapRef.current?.invalidateSize();
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [height]);
+
   const liveMapLabel =
     status === 'error' ? 'OSM map failed to load'
     : routePath?.length > 1 ? 'Street route loaded'
@@ -425,7 +433,7 @@ export function LiveMap({
 
   return (
     <div style={{ position: 'relative', height, borderRadius: RADIUS.lg, overflow: 'hidden', border: `1px solid ${C.gray200}`, boxShadow: SHADOW.sm }}>
-      <div ref={ref} style={{ width: '100%', height: '100%', background: C.gray50 }}/>
+      <div ref={ref} style={{ width: '100%', height: '100%', background: C.gray50, touchAction: interactive ? 'pan-x pan-y' : 'pan-y' }}/>
 
       {status === 'loading' && (
         <div style={{ position: 'absolute', inset: 0, background: C.gray50 }}>

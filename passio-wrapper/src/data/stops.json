@@ -1,0 +1,23 @@
+[
+  {
+    "id": "stop-yard",
+    "name": "The Yard",
+    "latitude": 40.49967,
+    "longitude": -74.44837,
+    "routesAndPositions": { "a": [0], "lx": [2] }
+  },
+  {
+    "id": "stop-lsc",
+    "name": "Livingston Student Center",
+    "latitude": 40.52401,
+    "longitude": -74.43698,
+    "routesAndPositions": { "lx": [0], "rexb": [3] }
+  },
+  {
+    "id": "stop-bsc",
+    "name": "Busch Student Center",
+    "latitude": 40.52324,
+    "longitude": -74.45851,
+    "routesAndPositions": { "a": [5], "rexb": [0] }
+  }
+]

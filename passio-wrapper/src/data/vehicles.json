@@ -1,0 +1,35 @@
+[
+  {
+    "id": "veh-a-01",
+    "name": "Bus A-01",
+    "routeId": "a",
+    "routeName": "A Route",
+    "latitude": 40.5078,
+    "longitude": -74.4501,
+    "speed": 17,
+    "heading": 92,
+    "updatedAt": "2026-03-18T14:12:00.000Z"
+  },
+  {
+    "id": "veh-lx-02",
+    "name": "Bus LX-02",
+    "routeId": "lx",
+    "routeName": "Livingston Express",
+    "latitude": 40.5189,
+    "longitude": -74.4415,
+    "speed": 21,
+    "heading": 265,
+    "updatedAt": "2026-03-18T14:12:05.000Z"
+  },
+  {
+    "id": "veh-rexb-03",
+    "name": "Bus REXB-03",
+    "routeId": "rexb",
+    "routeName": "Busch Express",
+    "latitude": 40.5144,
+    "longitude": -74.4522,
+    "speed": 14,
+    "heading": 140,
+    "updatedAt": "2026-03-18T14:12:10.000Z"
+  }
+]

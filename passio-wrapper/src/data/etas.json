@@ -1,0 +1,36 @@
+{
+  "stop-yard": [
+    {
+      "routeId": "a",
+      "routeName": "A Route",
+      "vehicleId": "veh-a-01",
+      "arrivalText": "4 min",
+      "minutes": 4
+    },
+    {
+      "routeId": "lx",
+      "routeName": "Livingston Express",
+      "vehicleId": "veh-lx-02",
+      "arrivalText": "8 min",
+      "minutes": 8
+    }
+  ],
+  "stop-lsc": [
+    {
+      "routeId": "lx",
+      "routeName": "Livingston Express",
+      "vehicleId": "veh-lx-02",
+      "arrivalText": "2 min",
+      "minutes": 2
+    }
+  ],
+  "stop-bsc": [
+    {
+      "routeId": "rexb",
+      "routeName": "Busch Express",
+      "vehicleId": "veh-rexb-03",
+      "arrivalText": "5 min",
+      "minutes": 5
+    }
+  ]
+}

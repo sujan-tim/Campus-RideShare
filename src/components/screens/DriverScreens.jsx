@@ -455,6 +455,7 @@ export function DriverEarningsScreen({ driverProfile, driverTripHistory, driverR
 export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket, onNotify, onBack }) {
   const [status, setStatus] = useState(trip.liveStatus || 'heading_pickup');
   const [elapsed, setElapsed] = useState(0);
+  const [mapExpanded, setMapExpanded] = useState(false);
   const fromCampus = resolveCampus(trip.fromCampusId);
   const toCampus = resolveCampus(trip.toCampusId);
   const pickupPoint = useMemo(() => (
@@ -621,7 +622,7 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
   }[status];
 
   return (
-    <div style={{ minHeight: '100vh', background: C.white, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: C.white, paddingBottom: '40px' }}>
       {showChat && (
         <ChatSheet
           messages={messages}
@@ -651,11 +652,17 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
           showDrivers={false}
           showMyLocation={false}
           interactive={false}
-          height={280}
+          height={mapExpanded ? '62vh' : 280}
         />
         <div style={{ position: 'absolute', top: '12px', left: '12px', right: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <BackBtn onClick={onBack}/>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setMapExpanded(prev => !prev)}
+              style={{ padding: '7px 12px', background: 'rgba(255,255,255,0.95)', borderRadius: RADIUS.full, boxShadow: SHADOW.md, border: `1px solid ${C.gray200}`, fontSize: '11px', fontWeight: '700', color: C.gray700, cursor: 'pointer', fontFamily: FONTS.body }}
+            >
+              {mapExpanded ? 'Minimize Map' : 'Maximize Map'}
+            </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 14px', background: 'rgba(255,255,255,0.95)', borderRadius: RADIUS.full, boxShadow: SHADOW.md, border: `1px solid ${meta.color}30` }}>
               <span style={{ fontSize: '13px' }}>{meta.icon}</span>
               <span style={{ fontSize: '12px', fontWeight: '700', color: meta.color }}>{meta.label}</span>
@@ -667,7 +674,7 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
         </div>
       </div>
 
-      <div style={{ flex: 1, padding: '16px 20px 40px', overflowY: 'auto' }}>
+      <div style={{ padding: '16px 20px 0' }}>
         <div style={{ display: 'flex', gap: '14px', alignItems: 'center', padding: '16px', background: C.white, border: `1px solid ${C.gray100}`, borderRadius: RADIUS.xl, marginBottom: '12px', boxShadow: SHADOW.sm }}>
           <Avatar initials={trip.initials} size={56}/>
           <div style={{ flex: 1 }}>

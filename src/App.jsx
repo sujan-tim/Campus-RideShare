@@ -345,7 +345,7 @@ export default function App() {
                       onPaymentMethodSave={setPaymentMethod}
                     />
                   )}
-                  {appRole === 'rider' && tab === 'buses' && <BusScreen/>}
+                  {appRole === 'rider' && tab === 'buses' && <BusScreen onBack={() => setTab('home')}/>}
                   {appRole === 'rider' && tab === 'rides' && (
                     <RidesScreen
                       activeRide={activeRide}
