@@ -151,8 +151,8 @@ export function Sheet({ children, onClose, title }) {
   );
 }
 
-export function BottomNav({ active, onChange }) {
-  const tabs = [
+export function BottomNav({ active, onChange, role = 'rider' }) {
+  const riderTabs = [
     { id: 'home', label: 'Home', icon: (on) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill={on ? C.red : 'none'} stroke={on ? C.red : C.gray400} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>
@@ -174,6 +174,30 @@ export function BottomNav({ active, onChange }) {
       </svg>
     )},
   ];
+  const driverTabs = [
+    { id: 'home', label: 'Drive', icon: (on) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={on ? C.red : C.gray400} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 11l1.5-4.5A2 2 0 018.4 5h7.2a2 2 0 011.9 1.5L19 11"/><rect x="3" y="11" width="18" height="7" rx="2"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/>
+      </svg>
+    )},
+    { id: 'rides', label: 'Trips', icon: (on) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={on ? C.red : C.gray400} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v20"/><path d="M5 6h8a3 3 0 010 6H9a3 3 0 000 6h10"/>
+      </svg>
+    )},
+    { id: 'earnings', label: 'Earnings', icon: (on) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={on ? C.red : C.gray400} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 000 7H14.5a3.5 3.5 0 010 7H6"/>
+      </svg>
+    )},
+    { id: 'profile', label: 'Profile', icon: (on) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={on ? C.red : C.gray400} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+    )},
+  ];
+  const tabs = role === 'driver' ? driverTabs : riderTabs;
+
   return (
     <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '430px', background: C.white, borderTop: `1px solid ${C.gray100}`, display: 'flex', padding: '8px 4px 20px', zIndex: 100, boxShadow: '0 -2px 16px rgba(0,0,0,0.06)' }}>
       {tabs.map(t => {

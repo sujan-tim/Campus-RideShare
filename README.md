@@ -7,10 +7,6 @@
 ## 🚀 Quick Start
 
 ```bash
-# Unzip and enter project
-unzip ruride-project.zip && cd ruride
-
-# Install dependencies
 npm install
 
 # Start dev server
@@ -20,21 +16,20 @@ npm run dev
 
 ---
 
-## 🗺️ Google Maps Setup (Required for live map)
+## 🗺️ OpenStreetMap + GPS
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create project → Enable these 3 APIs:
-   - **Maps JavaScript API**
-   - **Directions API**
-   - **Places API**
-3. Create API Key → copy it
-4. Open `src/components/map/LiveMap.jsx`
-5. Replace line 11:
-```js
-export const GOOGLE_MAPS_API_KEY = 'YOUR_ACTUAL_KEY_HERE';
-```
+The app now uses:
 
-> Without a key, the app uses a detailed SVG fallback map with real campus positions and animated driver pins — fully functional for demo.
+- **OpenStreetMap** tile layers via Leaflet
+- **Browser geolocation** for live GPS
+- **No API key required**
+
+Notes:
+
+- The Home screen uses real OSM tiles immediately after `npm install`
+- The browser will prompt for location permission the first time GPS is requested
+- If location permission is denied or unavailable, the app still shows the live OSM map with Rutgers campus and driver markers
+- Ride route previews use a direct route line between campuses for the demo
 
 ---
 
@@ -50,7 +45,7 @@ ruride/
 │   │   └── data.js                    ← Campuses, drivers, restaurants
 │   ├── components/
 │   │   ├── ui/index.jsx               ← Btn, Input, Select, Stars, BottomNav, Sheet...
-│   │   ├── map/LiveMap.jsx            ← Google Maps + SVG fallback
+│   │   ├── map/LiveMap.jsx            ← Leaflet + OpenStreetMap + SVG fallback
 │   │   └── screens/
 │   │       ├── SplashScreen.jsx
 │   │       ├── AuthScreens.jsx        ← Onboarding, Login, Signup, Verification
@@ -103,7 +98,7 @@ ruride/
 | Real-time | Socket.io / Firebase Realtime DB |
 | Payments | Stripe |
 | SMS / 2FA | Twilio |
-| Maps | Google Maps Platform |
+| Maps | OpenStreetMap + Leaflet |
 | Push | Firebase Cloud Messaging |
 | Storage | Firebase Storage / AWS S3 |
 

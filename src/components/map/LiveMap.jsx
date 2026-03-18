@@ -1,87 +1,131 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { C, FONTS, RADIUS, SHADOW } from '../../constants/theme';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import { C, RADIUS, SHADOW } from '../../constants/theme';
 import { CAMPUSES, MOCK_DRIVERS } from '../../constants/data';
 
-// ─── Replace with your actual key ─────────────────────────────────────────
-export const GOOGLE_MAPS_API_KEY = 'AIzaSyD-REPLACE-WITH-YOUR-KEY';
+const RU_CENTER = [40.5008, -74.4474];
+const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors';
 
-const RU_CENTER = { lat: 40.5008, lng: -74.4474 };
+function makeDriverMarkerHtml(initials) {
+  return `
+    <div style="position:relative;width:48px;height:56px;display:flex;align-items:flex-start;justify-content:center;">
+      <div style="width:40px;height:40px;border-radius:20px;background:#CC0033;color:#fff;display:flex;align-items:center;justify-content:center;font:700 14px system-ui;box-shadow:0 4px 12px rgba(0,0,0,0.22);">
+        ${initials}
+      </div>
+      <div style="position:absolute;bottom:2px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:12px solid #CC0033;"></div>
+    </div>
+  `;
+}
 
-// Light minimalist map style
-const MAP_STYLE = [
-  { elementType: 'geometry',               stylers: [{ color: '#f5f5f5' }] },
-  { elementType: 'labels.icon',            stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill',       stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke',     stylers: [{ color: '#f5f5f5' }] },
-  { featureType: 'administrative',         elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi',                    stylers: [{ visibility: 'off' }] },
-  { featureType: 'road',                   elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road',                   elementType: 'geometry.stroke', stylers: [{ color: '#e8e8e8' }] },
-  { featureType: 'road.arterial',          elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.highway',           elementType: 'geometry', stylers: [{ color: '#f0f0f0' }] },
-  { featureType: 'road.highway',           elementType: 'geometry.stroke', stylers: [{ color: '#e0e0e0' }] },
-  { featureType: 'road.local',             elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'transit',                stylers: [{ visibility: 'off' }] },
-  { featureType: 'water',                  elementType: 'geometry', stylers: [{ color: '#dce8f0' }] },
-  { featureType: 'landscape',              elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
-  { featureType: 'landscape.natural',      elementType: 'geometry', stylers: [{ color: '#e8f0e8' }] },
-];
+function makeCampusMarkerHtml(icon, activeColor = '#FFFFFF', textColor = '#CC0033', outline = '#CC0033') {
+  return `
+    <div style="position:relative;width:44px;height:52px;display:flex;align-items:flex-start;justify-content:center;">
+      <div style="width:34px;height:34px;border-radius:17px;background:${activeColor};border:2px solid ${outline};display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 3px 10px rgba(0,0,0,0.16);color:${textColor};">
+        ${icon}
+      </div>
+      <div style="position:absolute;bottom:2px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid ${outline};"></div>
+    </div>
+  `;
+}
 
-let mapsLoaded = false;
-let mapsLoading = false;
-const callbacks = [];
-
-function loadGoogleMaps(apiKey) {
-  return new Promise((resolve, reject) => {
-    if (window.google?.maps) { resolve(window.google.maps); return; }
-    callbacks.push({ resolve, reject });
-    if (mapsLoading) return;
-    mapsLoading = true;
-    window.__googleMapsReady = () => {
-      mapsLoaded = true;
-      callbacks.forEach(cb => cb.resolve(window.google.maps));
-      callbacks.length = 0;
-    };
-    const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=__googleMapsReady&libraries=geometry,places`;
-    s.async = true; s.defer = true;
-    s.onerror = () => callbacks.forEach(cb => cb.reject(new Error('Maps failed')));
-    document.head.appendChild(s);
+function createDivIcon(html, size, anchor, className) {
+  return L.divIcon({
+    html,
+    className,
+    iconSize: size,
+    iconAnchor: anchor,
   });
 }
 
-function makeDriverMarkerSvg(initials) {
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="56" viewBox="0 0 48 56">
-      <defs><filter id="s"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.2)"/></filter></defs>
-      <rect x="4" y="4" width="40" height="40" rx="20" fill="#CC0033" filter="url(#s)"/>
-      <text x="24" y="30" text-anchor="middle" font-size="14" font-weight="700" fill="white" font-family="system-ui">${initials}</text>
-      <path d="M24 48 L18 42 H30 Z" fill="#CC0033"/>
-    </svg>
-  `)}`;
+function campusIcon(campus, { isFrom, isTo }) {
+  if (isFrom) {
+    return createDivIcon(
+      makeCampusMarkerHtml(campus.icon, '#1A8A4A', '#FFFFFF', '#1A8A4A'),
+      [44, 52],
+      [22, 50],
+      'ruride-campus-marker'
+    );
+  }
+  if (isTo) {
+    return createDivIcon(
+      makeCampusMarkerHtml(campus.icon, '#CC0033', '#FFFFFF', '#CC0033'),
+      [44, 52],
+      [22, 50],
+      'ruride-campus-marker'
+    );
+  }
+  return createDivIcon(
+    makeCampusMarkerHtml(campus.icon),
+    [44, 52],
+    [22, 50],
+    'ruride-campus-marker'
+  );
 }
 
-function makeUserMarkerSvg() {
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
-      <circle cx="28" cy="28" r="24" fill="rgba(204,0,51,0.15)"/>
-      <circle cx="28" cy="28" r="14" fill="#CC0033" opacity="0.9"/>
-      <circle cx="28" cy="28" r="6" fill="white"/>
-    </svg>
-  `)}`;
+function driverIcon(initials) {
+  return createDivIcon(makeDriverMarkerHtml(initials), [48, 56], [24, 54], 'ruride-driver-marker');
 }
 
-function makeCampusMarkerSvg(icon) {
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">
-      <defs><filter id="s"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.18)"/></filter></defs>
-      <path d="M22 2C12 2 4 10 4 20 C4 32 22 50 22 50 S40 32 40 20 C40 10 32 2 22 2Z" fill="white" stroke="#CC0033" stroke-width="2" filter="url(#s)"/>
-      <text x="22" y="25" text-anchor="middle" font-size="16">${icon}</text>
-    </svg>
-  `)}`;
+function userIcon() {
+  return createDivIcon(
+    `
+      <div style="position:relative;width:56px;height:56px;display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;width:48px;height:48px;border-radius:24px;background:rgba(204,0,51,0.14);"></div>
+        <div style="position:absolute;width:24px;height:24px;border-radius:12px;background:#CC0033;box-shadow:0 0 0 4px rgba(255,255,255,0.92), 0 4px 12px rgba(0,0,0,0.18);"></div>
+        <div style="position:absolute;width:8px;height:8px;border-radius:4px;background:#FFFFFF;"></div>
+      </div>
+    `,
+    [56, 56],
+    [28, 28],
+    'ruride-user-marker'
+  );
 }
 
-// ─── MAIN MAP COMPONENT ───────────────────────────────────────────────────────
+function addCampusMarkers(map, markersRef, fromCampus, toCampus) {
+  CAMPUSES.forEach(campus => {
+    const isFrom = fromCampus?.id === campus.id;
+    const isTo = toCampus?.id === campus.id;
+    const marker = L.marker([campus.lat, campus.lng], {
+      icon: campusIcon(campus, { isFrom, isTo }),
+      zIndexOffset: isFrom || isTo ? 500 : 0,
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <div style="font-family:DM Sans,sans-serif;padding:4px 2px;min-width:150px">
+        <b style="font-size:13px;color:#0A0A0A">${campus.name}</b>
+        <p style="font-size:11px;color:#888;margin:3px 0 5px">${campus.desc}</p>
+        <span style="background:#FFF0F3;color:#CC0033;border:1px solid rgba(204,0,51,0.2);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">$5 Flat Fare</span>
+      </div>
+    `);
+    markersRef.current.push(marker);
+  });
+}
+
+function addDriverMarkers(map, markersRef, onDriverClick) {
+  MOCK_DRIVERS.forEach(driver => {
+    const marker = L.marker([driver.lat, driver.lng], {
+      icon: driverIcon(driver.initials),
+      zIndexOffset: 300,
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <div style="font-family:DM Sans,sans-serif;padding:4px 2px;min-width:160px">
+        <b style="font-size:13px;color:#0A0A0A">${driver.name}</b>
+        <p style="font-size:11px;color:#888;margin:2px 0">${driver.car}</p>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+          <span style="font-size:11px;color:#555">⭐ ${driver.rating}</span>
+          <span style="font-size:11px;color:#CC0033">ETA ${driver.eta}</span>
+          <span style="font-size:11px;color:#555">${driver.seats} seats</span>
+        </div>
+      </div>
+    `);
+
+    marker.on('click', () => onDriverClick?.(driver));
+    markersRef.current.push(marker);
+  });
+}
+
 export function LiveMap({
   height = 300,
   showDrivers = true,
@@ -96,199 +140,216 @@ export function LiveMap({
 }) {
   const ref = useRef(null);
   const mapRef = useRef(null);
+  const tileLayerRef = useRef(null);
   const markersRef = useRef([]);
-  const directionsRef = useRef(null);
+  const routeRef = useRef(null);
   const userMarkerRef = useRef(null);
+  const userCircleRef = useRef(null);
   const watchRef = useRef(null);
-  const [status, setStatus] = useState('loading'); // loading | ready | error | no_key
+  const centeredOnUserRef = useRef(false);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [locationStatus, setLocationStatus] = useState(showMyLocation ? 'requesting' : 'disabled');
   const [userPos, setUserPos] = useState(null);
 
-  const clearMarkers = () => {
-    markersRef.current.forEach(m => m.setMap(null));
+  const clearMarkers = useCallback(() => {
+    markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
-  };
+  }, []);
 
-  const initMap = useCallback(async () => {
-    // Check if API key is real
-    if (GOOGLE_MAPS_API_KEY.includes('REPLACE')) {
-      setStatus('no_key');
-      return;
+  const clearRoute = useCallback(() => {
+    routeRef.current?.remove();
+    routeRef.current = null;
+  }, []);
+
+  const clearUserOverlays = useCallback(() => {
+    userMarkerRef.current?.remove();
+    userMarkerRef.current = null;
+    userCircleRef.current?.remove();
+    userCircleRef.current = null;
+  }, []);
+
+  const stopWatchingLocation = useCallback(() => {
+    if (watchRef.current && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchRef.current);
+      watchRef.current = null;
     }
+  }, []);
+
+  const cleanupMap = useCallback(() => {
+    stopWatchingLocation();
+    clearMarkers();
+    clearRoute();
+    clearUserOverlays();
+    tileLayerRef.current?.remove();
+    tileLayerRef.current = null;
+    mapRef.current?.remove();
+    mapRef.current = null;
+  }, [clearMarkers, clearRoute, clearUserOverlays, stopWatchingLocation]);
+
+  const initMap = useCallback(() => {
+    if (!ref.current) return;
+
+    cleanupMap();
+    centeredOnUserRef.current = false;
+    setStatus('loading');
+    setLocationStatus(showMyLocation ? 'requesting' : 'disabled');
 
     try {
-      const maps = await loadGoogleMaps(GOOGLE_MAPS_API_KEY);
-      if (!ref.current) return;
-
-      const map = new maps.Map(ref.current, {
-        center: RU_CENTER, zoom: 14,
-        styles: MAP_STYLE,
-        disableDefaultUI: true,
+      const map = L.map(ref.current, {
+        center: RU_CENTER,
+        zoom: 14,
         zoomControl: interactive,
-        gestureHandling: interactive ? 'cooperative' : 'none',
-        clickableIcons: false,
+        dragging: interactive,
+        scrollWheelZoom: interactive,
+        doubleClickZoom: interactive,
+        boxZoom: interactive,
+        keyboard: interactive,
+        tap: interactive,
       });
       mapRef.current = map;
 
-      // Campus markers
-      if (showCampuses) {
-        CAMPUSES.forEach(campus => {
-          const isFrom = fromCampus?.id === campus.id;
-          const isTo = toCampus?.id === campus.id;
-          const marker = new maps.Marker({
-            position: { lat: campus.lat, lng: campus.lng },
-            map,
-            title: campus.name,
-            icon: {
-              url: makeCampusMarkerSvg(campus.icon),
-              scaledSize: new maps.Size(44, 52),
-              anchor: new maps.Point(22, 52),
-            },
-            zIndex: isFrom || isTo ? 10 : 5,
-            animation: (isFrom || isTo) ? maps.Animation.DROP : null,
-          });
+      tileLayerRef.current = L.tileLayer(TILE_URL, {
+        attribution: TILE_ATTRIBUTION,
+        maxZoom: 19,
+      }).addTo(map);
 
-          const info = new maps.InfoWindow({
-            content: `<div style="font-family:DM Sans,sans-serif;padding:6px 2px;min-width:140px">
-              <b style="font-size:13px;color:#0A0A0A">${campus.name}</b>
-              <p style="font-size:11px;color:#888;margin:3px 0 5px">${campus.desc}</p>
-              <span style="background:#FFF0F3;color:#CC0033;border:1px solid rgba(204,0,51,0.2);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700;">$5 Flat Fare</span>
-            </div>`,
-          });
-          marker.addListener('click', () => info.open(map, marker));
-          markersRef.current.push(marker);
-        });
-      }
+      if (showCampuses) addCampusMarkers(map, markersRef, fromCampus, toCampus);
+      if (showDrivers) addDriverMarkers(map, markersRef, onDriverClick);
 
-      // Driver markers
-      if (showDrivers) {
-        MOCK_DRIVERS.forEach(driver => {
-          const marker = new maps.Marker({
-            position: { lat: driver.lat, lng: driver.lng },
-            map,
-            title: driver.name,
-            icon: {
-              url: makeDriverMarkerSvg(driver.initials),
-              scaledSize: new maps.Size(48, 56),
-              anchor: new maps.Point(24, 56),
-            },
-            zIndex: 8,
-          });
-
-          const info = new maps.InfoWindow({
-            content: `<div style="font-family:DM Sans,sans-serif;padding:6px 2px;min-width:160px">
-              <b style="font-size:13px;color:#0A0A0A">${driver.name}</b>
-              <p style="font-size:11px;color:#888;margin:2px 0">${driver.car}</p>
-              <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                <span style="font-size:11px;color:#555">⭐ ${driver.rating}</span>
-                <span style="font-size:11px;color:#CC0033">ETA ${driver.eta}</span>
-                <span style="font-size:11px;color:#555">${driver.seats} seats</span>
-              </div>
-            </div>`,
-          });
-
-          marker.addListener('click', () => {
-            info.open(map, marker);
-            onDriverClick?.(driver);
-          });
-          markersRef.current.push(marker);
-        });
-      }
-
-      // Active driver tracking
       if (activeDriverLocation) {
-        const m = new maps.Marker({
-          position: activeDriverLocation, map,
-          icon: { url: makeDriverMarkerSvg('DR'), scaledSize: new maps.Size(52, 60), anchor: new maps.Point(26, 60) },
-          zIndex: 20, animation: maps.Animation.BOUNCE,
-        });
-        markersRef.current.push(m);
+        const marker = L.marker([activeDriverLocation.lat, activeDriverLocation.lng], {
+          icon: driverIcon('DR'),
+          zIndexOffset: 600,
+        }).addTo(map);
+        markersRef.current.push(marker);
       }
 
-      // Route rendering
       if (fromCampus && toCampus) {
-        const ds = new maps.DirectionsService();
-        const dr = new maps.DirectionsRenderer({
-          map, suppressMarkers: true,
-          polylineOptions: { strokeColor: '#CC0033', strokeWeight: 4, strokeOpacity: 0.8 },
-        });
-        directionsRef.current = dr;
-        ds.route({
-          origin: { lat: fromCampus.lat, lng: fromCampus.lng },
-          destination: { lat: toCampus.lat, lng: toCampus.lng },
-          travelMode: maps.TravelMode.DRIVING,
-        }, (result, status) => {
-          if (status === 'OK') {
-            dr.setDirections(result);
-            const bounds = new maps.LatLngBounds();
-            bounds.extend({ lat: fromCampus.lat, lng: fromCampus.lng });
-            bounds.extend({ lat: toCampus.lat, lng: toCampus.lng });
-            map.fitBounds(bounds, { top: 60, bottom: 60, left: 40, right: 40 });
+        routeRef.current = L.polyline(
+          [
+            [fromCampus.lat, fromCampus.lng],
+            [toCampus.lat, toCampus.lng],
+          ],
+          {
+            color: C.red,
+            weight: 4,
+            opacity: 0.8,
+            dashArray: '10 8',
           }
+        ).addTo(map);
+
+        map.fitBounds(routeRef.current.getBounds(), {
+          padding: [36, 36],
         });
+        centeredOnUserRef.current = true;
       }
 
-      // User geolocation
       if (showMyLocation && navigator.geolocation) {
-        const watch = navigator.geolocation.watchPosition(
-          pos => {
-            const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        watchRef.current = navigator.geolocation.watchPosition(
+          position => {
+            const loc = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+
             setUserPos(loc);
+            setLocationStatus('ready');
             onLocationUpdate?.(loc);
 
             if (!userMarkerRef.current) {
-              userMarkerRef.current = new maps.Marker({
-                position: loc, map, zIndex: 15,
-                icon: { url: makeUserMarkerSvg(), scaledSize: new maps.Size(56, 56), anchor: new maps.Point(28, 28) },
-                title: 'Your Location',
-              });
-              // Only center on user once if no route
-              if (!fromCampus && !toCampus) map.setCenter(loc);
+              userMarkerRef.current = L.marker([loc.lat, loc.lng], {
+                icon: userIcon(),
+                zIndexOffset: 700,
+              }).addTo(map);
             } else {
-              userMarkerRef.current.setPosition(loc);
+              userMarkerRef.current.setLatLng([loc.lat, loc.lng]);
+            }
+
+            if (!userCircleRef.current) {
+              userCircleRef.current = L.circle([loc.lat, loc.lng], {
+                radius: Math.max(position.coords.accuracy || 0, 20),
+                color: 'transparent',
+                fillColor: C.red,
+                fillOpacity: 0.08,
+                interactive: false,
+              }).addTo(map);
+            } else {
+              userCircleRef.current.setLatLng([loc.lat, loc.lng]);
+              userCircleRef.current.setRadius(Math.max(position.coords.accuracy || 0, 20));
+            }
+
+            if (!centeredOnUserRef.current && !fromCampus && !toCampus) {
+              map.setView([loc.lat, loc.lng], 15);
+              centeredOnUserRef.current = true;
             }
           },
-          () => {}, // ignore errors silently
+          error => {
+            if (error.code === error.PERMISSION_DENIED) setLocationStatus('denied');
+            else setLocationStatus('unavailable');
+          },
           { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
         );
-        watchRef.current = watch;
+      } else if (showMyLocation) {
+        setLocationStatus('unsupported');
       }
 
       setStatus('ready');
-    } catch (e) {
+    } catch (error) {
       setStatus('error');
     }
-  }, [fromCampus?.id, toCampus?.id, showDrivers, activeDriverLocation]);
+  }, [
+    activeDriverLocation,
+    cleanupMap,
+    fromCampus,
+    onDriverClick,
+    onLocationUpdate,
+    showCampuses,
+    showDrivers,
+    showMyLocation,
+    toCampus,
+    interactive,
+  ]);
 
   useEffect(() => {
     initMap();
-    return () => {
-      if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current);
-    };
-  }, [initMap]);
+    return cleanupMap;
+  }, [cleanupMap, initMap]);
+
+  const liveMapLabel =
+    status === 'error' ? 'OSM map failed to load'
+    : locationStatus === 'ready' ? 'Live GPS connected'
+    : locationStatus === 'requesting' ? 'Requesting GPS access'
+    : locationStatus === 'denied' ? 'Location permission denied'
+    : locationStatus === 'unsupported' ? 'GPS unsupported in this browser'
+    : locationStatus === 'unavailable' ? 'Waiting for a GPS fix'
+    : 'OpenStreetMap live';
 
   return (
     <div style={{ position: 'relative', height, borderRadius: RADIUS.lg, overflow: 'hidden', border: `1px solid ${C.gray200}`, boxShadow: SHADOW.sm }}>
       <div ref={ref} style={{ width: '100%', height: '100%', background: C.gray50 }}/>
 
-      {/* No key — show SVG fallback */}
-      {status === 'no_key' && (
+      {status === 'loading' && (
+        <div style={{ position: 'absolute', inset: 0, background: C.gray50 }}>
+          <FallbackMap fromCampus={fromCampus} toCampus={toCampus} showDrivers={showDrivers} height={height}/>
+        </div>
+      )}
+
+      {status === 'error' && (
         <div style={{ position: 'absolute', inset: 0 }}>
           <FallbackMap fromCampus={fromCampus} toCampus={toCampus} showDrivers={showDrivers} height={height}/>
         </div>
       )}
 
-      {/* Loading */}
-      {status === 'loading' && (
-        <div style={{ position: 'absolute', inset: 0, background: C.gray50, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-          <FallbackMap fromCampus={fromCampus} toCampus={toCampus} showDrivers={showDrivers} height={height}/>
-        </div>
-      )}
+      <div style={{ position: 'absolute', top: '12px', right: '12px', maxWidth: '220px', padding: '7px 10px', borderRadius: RADIUS.full, background: 'rgba(255,255,255,0.94)', border: `1px solid ${C.gray200}`, boxShadow: SHADOW.sm, fontSize: '11px', fontWeight: '700', color: status === 'ready' && locationStatus === 'ready' ? C.success : C.gray600, zIndex: 500 }}>
+        {status === 'ready' && locationStatus === 'ready' ? '● ' : ''}{liveMapLabel}
+      </div>
 
-      {/* Recenter button */}
       {status === 'ready' && userPos && (
         <button
-          onClick={() => mapRef.current?.setCenter(userPos)}
-          style={{ position: 'absolute', bottom: '12px', right: '12px', width: '36px', height: '36px', borderRadius: '9px', background: C.white, border: `1px solid ${C.gray200}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: SHADOW.md }}
+          onClick={() => {
+            mapRef.current?.setView([userPos.lat, userPos.lng], 15);
+          }}
+          style={{ position: 'absolute', bottom: '12px', right: '12px', width: '36px', height: '36px', borderRadius: '9px', background: C.white, border: `1px solid ${C.gray200}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: SHADOW.md, zIndex: 500 }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
@@ -296,9 +357,8 @@ export function LiveMap({
         </button>
       )}
 
-      {/* Campus labels overlay */}
       {(fromCampus || toCampus) && (
-        <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', flexDirection: 'column', gap: '5px', maxWidth: '180px' }}>
+        <div style={{ position: 'absolute', top: '10px', left: '10px', display: 'flex', flexDirection: 'column', gap: '5px', maxWidth: '180px', zIndex: 500 }}>
           {fromCampus && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.95)', padding: '4px 10px', borderRadius: RADIUS.full, boxShadow: SHADOW.sm, border: `1px solid ${C.gray200}` }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: C.success, flexShrink: 0 }}/>
@@ -322,7 +382,6 @@ export function FallbackMap({ fromCampus, toCampus, showDrivers = true, height =
   const [tick, setTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 700); return () => clearInterval(t); }, []);
 
-  // Campus pixel positions on a 400×260 canvas
   const pos = {
     busch:       { x: 85,  y: 70  },
     college_ave: { x: 200, y: 130 },
@@ -331,7 +390,6 @@ export function FallbackMap({ fromCampus, toCampus, showDrivers = true, height =
     livingston:  { x: 305, y: 80  },
   };
 
-  // Driver positions
   const driverPos = [
     { x: 155, y: 105, initials: 'MT', eta: '4m' },
     { x: 235, y: 155, initials: 'PS', eta: '7m' },
@@ -341,20 +399,16 @@ export function FallbackMap({ fromCampus, toCampus, showDrivers = true, height =
   ];
 
   const fp = fromCampus ? pos[fromCampus.id] : null;
-  const tp = toCampus   ? pos[toCampus.id]   : null;
+  const tp = toCampus ? pos[toCampus.id] : null;
   const progress = (tick % 14) / 14;
 
   return (
     <div style={{ width: '100%', height, overflow: 'hidden', borderRadius: RADIUS.lg, position: 'relative', background: '#f5f5f5', border: `1px solid ${C.gray200}` }}>
       <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice">
-        {/* Base */}
         <rect width="400" height="260" fill="#f5f5f5"/>
-        {/* Water */}
         <ellipse cx="350" cy="230" rx="80" ry="40" fill="#dce8f0" opacity="0.6"/>
-        {/* Green zones */}
         <ellipse cx="190" cy="155" rx="50" ry="30" fill="#e8f0e8" opacity="0.8"/>
         <ellipse cx="90" cy="90" rx="40" ry="25" fill="#e8f0e8" opacity="0.7"/>
-        {/* Roads */}
         <path d="M0 130 Q80 122 160 130 Q240 138 320 130 Q370 125 400 130" fill="none" stroke="white" strokeWidth="10" opacity="0.9"/>
         <path d="M0 130 Q80 122 160 130 Q240 138 320 130 Q370 125 400 130" fill="none" stroke="#e8e8e8" strokeWidth="1"/>
         <path d="M160 0 Q168 80 200 130 Q215 160 220 260" fill="none" stroke="white" strokeWidth="8" opacity="0.9"/>
@@ -364,7 +418,6 @@ export function FallbackMap({ fromCampus, toCampus, showDrivers = true, height =
         <path d="M200 130 Q255 105 305 80" fill="none" stroke="white" strokeWidth="6" opacity="0.8"/>
         <path d="M280 75 L305 80 L310 120 Q290 150 270 175" fill="none" stroke="white" strokeWidth="6" opacity="0.8"/>
 
-        {/* Route */}
         {fp && tp && (
           <>
             <line x1={fp.x} y1={fp.y} x2={tp.x} y2={tp.y} stroke={C.red} strokeWidth="3" strokeDasharray="8,5" opacity="0.7"/>
@@ -372,36 +425,36 @@ export function FallbackMap({ fromCampus, toCampus, showDrivers = true, height =
           </>
         )}
 
-        {/* Campus markers */}
-        {CAMPUSES.map(c => {
-          const p = pos[c.id];
-          const isF = fromCampus?.id === c.id;
-          const isT = toCampus?.id === c.id;
-          const active = isF || isT;
+        {CAMPUSES.map(campus => {
+          const position = pos[campus.id];
+          const isFrom = fromCampus?.id === campus.id;
+          const isTo = toCampus?.id === campus.id;
+          const active = isFrom || isTo;
           return (
-            <g key={c.id}>
-              {active && <circle cx={p.x} cy={p.y} r="22" fill={isF ? 'rgba(26,138,74,0.12)' : 'rgba(204,0,51,0.1)'}/>}
-              {/* Pin shape */}
-              <ellipse cx={p.x} cy={p.y + 20} rx="5" ry="2" fill="rgba(0,0,0,0.12)"/>
-              <path d={`M${p.x} ${p.y + 14} Q${p.x-4} ${p.y + 8} ${p.x-8} ${p.y} A8 8 0 1 1 ${p.x+8} ${p.y} Q${p.x+4} ${p.y+8} ${p.x} ${p.y+14}Z`}
-                fill={active ? (isF ? C.success : C.red) : C.white} stroke={active ? 'none' : C.gray300} strokeWidth="1"/>
-              <text x={p.x} y={p.y + 4} textAnchor="middle" fontSize="9">{c.icon}</text>
-              {!active && <text x={p.x} y={p.y + 26} textAnchor="middle" fontSize="8" fill={C.gray500} fontFamily="system-ui" fontWeight="600">{c.name.split(' ')[0]}</text>}
+            <g key={campus.id}>
+              {active && <circle cx={position.x} cy={position.y} r="22" fill={isFrom ? 'rgba(26,138,74,0.12)' : 'rgba(204,0,51,0.1)'}/>}
+              <ellipse cx={position.x} cy={position.y + 20} rx="5" ry="2" fill="rgba(0,0,0,0.12)"/>
+              <path
+                d={`M${position.x} ${position.y + 14} Q${position.x - 4} ${position.y + 8} ${position.x - 8} ${position.y} A8 8 0 1 1 ${position.x + 8} ${position.y} Q${position.x + 4} ${position.y + 8} ${position.x} ${position.y + 14}Z`}
+                fill={active ? (isFrom ? C.success : C.red) : C.white}
+                stroke={active ? 'none' : C.gray300}
+                strokeWidth="1"
+              />
+              <text x={position.x} y={position.y + 4} textAnchor="middle" fontSize="9">{campus.icon}</text>
+              {!active && <text x={position.x} y={position.y + 26} textAnchor="middle" fontSize="8" fill={C.gray500} fontFamily="system-ui" fontWeight="600">{campus.name.split(' ')[0]}</text>}
             </g>
           );
         })}
 
-        {/* Driver markers */}
-        {showDrivers && driverPos.map((d, i) => (
-          <g key={i}>
-            <circle cx={d.x} cy={d.y} r="16" fill={C.red} style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}/>
-            <text x={d.x} y={d.y + 4} textAnchor="middle" fontSize="9" fill="white" fontFamily="system-ui" fontWeight="700">{d.initials}</text>
-            <rect x={d.x - 12} y={d.y - 28} width="24" height="14" rx="4" fill="white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}/>
-            <text x={d.x} y={d.y - 19} textAnchor="middle" fontSize="8" fill={C.red} fontFamily="system-ui" fontWeight="700">{d.eta}</text>
+        {showDrivers && driverPos.map((driver, index) => (
+          <g key={index}>
+            <circle cx={driver.x} cy={driver.y} r="16" fill={C.red} style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.18))' }}/>
+            <text x={driver.x} y={driver.y + 4} textAnchor="middle" fontSize="9" fill="white" fontFamily="system-ui" fontWeight="700">{driver.initials}</text>
+            <rect x={driver.x - 12} y={driver.y - 28} width="24" height="14" rx="4" fill="white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))' }}/>
+            <text x={driver.x} y={driver.y - 19} textAnchor="middle" fontSize="8" fill={C.red} fontFamily="system-ui" fontWeight="700">{driver.eta}</text>
           </g>
         ))}
 
-        {/* User location dot */}
         {!fromCampus && !toCampus && (
           <>
             <circle cx="200" cy="128" r="20" fill="rgba(204,0,51,0.1)"/>
@@ -410,11 +463,9 @@ export function FallbackMap({ fromCampus, toCampus, showDrivers = true, height =
           </>
         )}
 
-        {/* Legend */}
-        <text x="6" y="254" fontSize="8" fill={C.gray400} fontFamily="monospace">RUTGERS UNIVERSITY · NEW BRUNSWICK, NJ</text>
+        <text x="6" y="254" fontSize="8" fill={C.gray400} fontFamily="monospace">OPENSTREETMAP · RUTGERS UNIVERSITY · NEW BRUNSWICK, NJ</text>
       </svg>
 
-      {/* Labels */}
       {(fromCampus || toCampus) && (
         <div style={{ position: 'absolute', bottom: '10px', left: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {fromCampus && (
