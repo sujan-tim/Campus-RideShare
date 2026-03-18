@@ -3,6 +3,7 @@ import SplashScreen from './components/screens/SplashScreen';
 import { OnboardingScreen, LoginScreen, SignupScreen, VerificationScreen } from './components/screens/AuthScreens';
 import HomeScreen from './components/screens/HomeScreen';
 import FoodScreen from './components/screens/FoodScreen';
+import BusScreen from './components/screens/BusScreen';
 import { RidesScreen, ProfileScreen } from './components/screens/ProfileScreens';
 import { ActiveRideScreen, ReviewScreen } from './components/screens/RideScreens';
 import { ActiveDriverTripScreen, DriverEarningsScreen, DriverHomeScreen, DriverTripsScreen } from './components/screens/DriverScreens';
@@ -40,8 +41,8 @@ export default function App() {
   const [screen, setScreen] = useState(persisted.user ? 'app' : 'onboarding');
   const [tab, setTab] = useState('home');
   const [user, setUser] = useState(persisted.user || null);
-  const [activeRide, setActiveRide] = useState(null);
-  const [reviewRide, setReviewRide] = useState(null);
+  const [activeRide, setActiveRide] = useState(persisted.activeRide || null);
+  const [reviewRide, setReviewRide] = useState(persisted.reviewRide || null);
   const [driverActiveTrip, setDriverActiveTrip] = useState(persisted.driverActiveTrip || null);
   const [paymentMethod, setPaymentMethod] = useState(persisted.paymentMethod || null);
   const [rideHistory, setRideHistory] = useState(persisted.rideHistory || []);
@@ -61,10 +62,15 @@ export default function App() {
   );
   const [driverRequests, setDriverRequests] = useState(initialDriverRequests);
   const appRole = user?.role === 'driver' ? 'driver' : 'rider';
+  const showRiderLiveTrip = appRole === 'rider' && activeRide && tab === 'rides';
+  const showDriverLiveTrip = appRole === 'driver' && driverActiveTrip && tab === 'rides';
+  const showReviewScreen = appRole === 'rider' && reviewRide && !activeRide && tab === 'rides';
 
   useEffect(() => {
     saveAppState({
       user,
+      activeRide,
+      reviewRide,
       driverActiveTrip,
       paymentMethod,
       rideHistory,
@@ -75,10 +81,11 @@ export default function App() {
       driverProfile,
       driverRequests,
     });
-  }, [driverActiveTrip, driverProfile, driverRequests, driverTripHistory, notifications, paymentMethod, rideHistory, savedPlaces, supportTickets, user]);
+  }, [activeRide, driverActiveTrip, driverProfile, driverRequests, driverTripHistory, notifications, paymentMethod, reviewRide, rideHistory, savedPlaces, supportTickets, user]);
 
   useEffect(() => {
     if (appRole === 'driver' && tab === 'food') setTab('home');
+    if (appRole === 'driver' && tab === 'buses') setTab('home');
     if (appRole === 'rider' && tab === 'earnings') setTab('home');
   }, [appRole, tab]);
 
@@ -152,12 +159,14 @@ export default function App() {
       status: 'active',
     };
     setActiveRide(nextRide);
+    setTab('rides');
     addNotification('Ride confirmed', `${nextRide.name} is on the way to ${nextRide.pickupLabel || nextRide.from}.`, 'success');
   };
 
   const handleRideComplete = (ride) => {
     setActiveRide(null);
     setReviewRide(ride);
+    setTab('rides');
     addNotification('Ride completed', `Trip to ${ride.dropoffLabel || ride.to} is ready for review.`, 'info');
   };
 
@@ -290,29 +299,31 @@ export default function App() {
         {/* Main App */}
         {!splash && screen === 'app' && (
           <>
-            {appRole === 'rider' && activeRide && (
+            {showRiderLiveTrip && (
               <ActiveRideScreen
                 ride={activeRide}
                 onComplete={handleRideComplete}
                 onCreateSupportTicket={createSupportTicket}
                 onNotify={addNotification}
+                onBack={() => setTab('home')}
               />
             )}
 
-            {appRole === 'driver' && driverActiveTrip && (
+            {showDriverLiveTrip && (
               <ActiveDriverTripScreen
                 trip={driverActiveTrip}
                 onComplete={handleDriverTripComplete}
                 onCreateSupportTicket={createSupportTicket}
                 onNotify={addNotification}
+                onBack={() => setTab('home')}
               />
             )}
 
-            {appRole === 'rider' && reviewRide && !activeRide && (
-              <ReviewScreen ride={reviewRide} onDone={handleReviewDone}/>
+            {showReviewScreen && (
+              <ReviewScreen ride={reviewRide} onDone={handleReviewDone} onBack={() => setTab('home')}/>
             )}
 
-            {!activeRide && !reviewRide && !driverActiveTrip && (
+            {!showRiderLiveTrip && !showReviewScreen && !showDriverLiveTrip && (
               <>
                 <div style={{ paddingBottom: '80px' }}>
                   {appRole === 'rider' && tab === 'home' && (
@@ -334,6 +345,7 @@ export default function App() {
                       onPaymentMethodSave={setPaymentMethod}
                     />
                   )}
+                  {appRole === 'rider' && tab === 'buses' && <BusScreen/>}
                   {appRole === 'rider' && tab === 'rides' && (
                     <RidesScreen
                       activeRide={activeRide}

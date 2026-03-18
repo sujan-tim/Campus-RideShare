@@ -33,6 +33,32 @@ Notes:
 
 ---
 
+## 🚌 Rutgers Transit Integration
+
+The app now includes a Rutgers bus tracker screen designed for a production Passio-style integration.
+
+Frontend setup:
+
+```bash
+VITE_RUTGERS_TRANSIT_API_BASE=https://your-transit-proxy.example.com
+```
+
+Expected backend endpoints:
+
+- `GET /routes` → `{ routes: [{ id, shortName, longName, campus, color, path }] }`
+- `GET /stops` → `{ stops: [{ id, name, campus, lat, lng, routeIds }] }`
+- `GET /alerts` → `{ alerts: [{ id, title, body, updatedAt }] }`
+- `GET /vehicles?routeId=A&routeId=LX` → `{ vehicles: [{ id, name, routeId, lat, lng, campus, nextStopName, tripHeadsign, speedMph, lastUpdated }] }`
+- `GET /stops/:stopId/predictions?routeId=A` → `{ predictions: [{ routeId, routeShortName, routeName, vehicleId, vehicleName, minutes, arrivalText, headsign }] }`
+
+Notes:
+
+- The frontend intentionally does **not** call undocumented Rutgers/Passio endpoints directly from the browser
+- Use a server-side proxy for auth, rate limiting, caching, feed normalization, and resilience
+- When the backend is not configured, the app falls back to the official Rutgers tracker at `https://rutgers.passiogo.com/`
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -43,6 +69,7 @@ ruride/
 │   ├── constants/
 │   │   ├── theme.js                   ← Colors, fonts, shadows (white/black/red)
 │   │   └── data.js                    ← Campuses, drivers, restaurants
+│   │   └── transit.js                 ← Rutgers transit route catalog + polling config
 │   ├── components/
 │   │   ├── ui/index.jsx               ← Btn, Input, Select, Stars, BottomNav, Sheet...
 │   │   ├── map/LiveMap.jsx            ← Leaflet + OpenStreetMap + SVG fallback
@@ -50,9 +77,12 @@ ruride/
 │   │       ├── SplashScreen.jsx
 │   │       ├── AuthScreens.jsx        ← Onboarding, Login, Signup, Verification
 │   │       ├── HomeScreen.jsx         ← Main dashboard, ride booking, driver list
+│   │       ├── BusScreen.jsx          ← Rutgers live transit tracker
 │   │       ├── RideScreens.jsx        ← Active ride + review
 │   │       ├── FoodScreen.jsx         ← Campus food delivery
 │   │       └── ProfileScreens.jsx     ← Rides history, profile, settings
+│   └── services/
+│       └── rutgersTransit.js          ← Transit backend client + polling helpers
 ├── index.html
 ├── package.json
 └── vite.config.js
@@ -72,8 +102,9 @@ ruride/
 8. **Active Ride** → Map with route → Status progression → Complete
 9. **Review** → Rate driver, tags, comment
 10. **Eats** → Browse restaurants by campus → Menu → Order
-11. **My Rides** → History with re-book, Upcoming tab
-12. **Profile** → Info, Payment, Settings with real toggles
+11. **Buses** → Live Rutgers transit map → Stops → ETAs → Bus details
+12. **My Rides** → History with re-book, Upcoming tab
+13. **Profile** → Info, Payment, Settings with real toggles
 
 ---
 

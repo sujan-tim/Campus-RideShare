@@ -82,6 +82,21 @@ function userIcon() {
   );
 }
 
+function riderIcon() {
+  return createDivIcon(
+    `
+      <div style="position:relative;width:54px;height:54px;display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;width:44px;height:44px;border-radius:22px;background:rgba(10,132,255,0.14);"></div>
+        <div style="position:absolute;width:22px;height:22px;border-radius:11px;background:#0A84FF;box-shadow:0 0 0 4px rgba(255,255,255,0.92), 0 4px 12px rgba(0,0,0,0.18);"></div>
+        <div style="position:absolute;width:7px;height:7px;border-radius:3.5px;background:#FFFFFF;"></div>
+      </div>
+    `,
+    [54, 54],
+    [27, 27],
+    'ruride-rider-marker'
+  );
+}
+
 function addCampusMarkers(map, markersRef, fromCampus, toCampus) {
   CAMPUSES.forEach(campus => {
     const isFrom = fromCampus?.id === campus.id;
@@ -132,7 +147,10 @@ export function LiveMap({
   showCampuses = true,
   fromCampus = null,
   toCampus = null,
+  routePath = null,
+  traveledRoutePath = null,
   activeDriverLocation = null,
+  activeRiderLocation = null,
   onDriverClick = null,
   onLocationUpdate = null,
   showMyLocation = true,
@@ -143,8 +161,11 @@ export function LiveMap({
   const tileLayerRef = useRef(null);
   const markersRef = useRef([]);
   const routeRef = useRef(null);
+  const traveledRouteRef = useRef(null);
+  const activeDriverMarkerRef = useRef(null);
   const userMarkerRef = useRef(null);
   const userCircleRef = useRef(null);
+  const riderMarkerRef = useRef(null);
   const watchRef = useRef(null);
   const centeredOnUserRef = useRef(false);
   const [status, setStatus] = useState('loading'); // loading | ready | error
@@ -159,6 +180,8 @@ export function LiveMap({
   const clearRoute = useCallback(() => {
     routeRef.current?.remove();
     routeRef.current = null;
+    traveledRouteRef.current?.remove();
+    traveledRouteRef.current = null;
   }, []);
 
   const clearUserOverlays = useCallback(() => {
@@ -166,6 +189,13 @@ export function LiveMap({
     userMarkerRef.current = null;
     userCircleRef.current?.remove();
     userCircleRef.current = null;
+  }, []);
+
+  const clearLiveMarkers = useCallback(() => {
+    activeDriverMarkerRef.current?.remove();
+    activeDriverMarkerRef.current = null;
+    riderMarkerRef.current?.remove();
+    riderMarkerRef.current = null;
   }, []);
 
   const stopWatchingLocation = useCallback(() => {
@@ -180,21 +210,21 @@ export function LiveMap({
     clearMarkers();
     clearRoute();
     clearUserOverlays();
+    clearLiveMarkers();
     tileLayerRef.current?.remove();
     tileLayerRef.current = null;
     mapRef.current?.remove();
     mapRef.current = null;
-  }, [clearMarkers, clearRoute, clearUserOverlays, stopWatchingLocation]);
+  }, [clearLiveMarkers, clearMarkers, clearRoute, clearUserOverlays, stopWatchingLocation]);
 
   const initMap = useCallback(() => {
-    if (!ref.current) return;
-
-    cleanupMap();
-    centeredOnUserRef.current = false;
-    setStatus('loading');
-    setLocationStatus(showMyLocation ? 'requesting' : 'disabled');
+    if (!ref.current || mapRef.current) return;
 
     try {
+      centeredOnUserRef.current = false;
+      setStatus('loading');
+      setLocationStatus(showMyLocation ? 'requesting' : 'disabled');
+
       const map = L.map(ref.current, {
         center: RU_CENTER,
         zoom: 14,
@@ -212,37 +242,6 @@ export function LiveMap({
         attribution: TILE_ATTRIBUTION,
         maxZoom: 19,
       }).addTo(map);
-
-      if (showCampuses) addCampusMarkers(map, markersRef, fromCampus, toCampus);
-      if (showDrivers) addDriverMarkers(map, markersRef, onDriverClick);
-
-      if (activeDriverLocation) {
-        const marker = L.marker([activeDriverLocation.lat, activeDriverLocation.lng], {
-          icon: driverIcon('DR'),
-          zIndexOffset: 600,
-        }).addTo(map);
-        markersRef.current.push(marker);
-      }
-
-      if (fromCampus && toCampus) {
-        routeRef.current = L.polyline(
-          [
-            [fromCampus.lat, fromCampus.lng],
-            [toCampus.lat, toCampus.lng],
-          ],
-          {
-            color: C.red,
-            weight: 4,
-            opacity: 0.8,
-            dashArray: '10 8',
-          }
-        ).addTo(map);
-
-        map.fitBounds(routeRef.current.getBounds(), {
-          padding: [36, 36],
-        });
-        centeredOnUserRef.current = true;
-      }
 
       if (showMyLocation && navigator.geolocation) {
         watchRef.current = navigator.geolocation.watchPosition(
@@ -298,15 +297,8 @@ export function LiveMap({
       setStatus('error');
     }
   }, [
-    activeDriverLocation,
-    cleanupMap,
-    fromCampus,
-    onDriverClick,
     onLocationUpdate,
-    showCampuses,
-    showDrivers,
     showMyLocation,
-    toCampus,
     interactive,
   ]);
 
@@ -315,8 +307,115 @@ export function LiveMap({
     return cleanupMap;
   }, [cleanupMap, initMap]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    clearMarkers();
+
+    if (showCampuses) addCampusMarkers(map, markersRef, fromCampus, toCampus);
+    if (showDrivers) addDriverMarkers(map, markersRef, onDriverClick);
+  }, [clearMarkers, fromCampus, onDriverClick, showCampuses, showDrivers, toCampus]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (routePath?.length > 1) {
+      if (!routeRef.current) {
+        routeRef.current = L.polyline(routePath, {
+          color: C.red,
+          weight: 5,
+          opacity: 0.9,
+        }).addTo(map);
+      } else {
+        routeRef.current.setStyle({ dashArray: null });
+        routeRef.current.setLatLngs(routePath);
+      }
+    } else if (fromCampus && toCampus) {
+      const straightPath = [
+        [fromCampus.lat, fromCampus.lng],
+        [toCampus.lat, toCampus.lng],
+      ];
+      if (!routeRef.current) {
+        routeRef.current = L.polyline(straightPath, {
+          color: C.red,
+          weight: 4,
+          opacity: 0.8,
+          dashArray: '10 8',
+        }).addTo(map);
+      } else {
+        routeRef.current.setStyle({ dashArray: '10 8' });
+        routeRef.current.setLatLngs(straightPath);
+      }
+    } else {
+      routeRef.current?.remove();
+      routeRef.current = null;
+    }
+
+    if (traveledRoutePath?.length > 1) {
+      if (!traveledRouteRef.current) {
+        traveledRouteRef.current = L.polyline(traveledRoutePath, {
+          color: C.success,
+          weight: 5,
+          opacity: 0.95,
+        }).addTo(map);
+      } else {
+        traveledRouteRef.current.setLatLngs(traveledRoutePath);
+      }
+    } else {
+      traveledRouteRef.current?.remove();
+      traveledRouteRef.current = null;
+    }
+
+    if (activeDriverLocation) {
+      const nextLatLng = [activeDriverLocation.lat, activeDriverLocation.lng];
+      if (!activeDriverMarkerRef.current) {
+        activeDriverMarkerRef.current = L.marker(nextLatLng, {
+          icon: driverIcon('DR'),
+          zIndexOffset: 600,
+        }).addTo(map);
+      } else {
+        activeDriverMarkerRef.current.setLatLng(nextLatLng);
+      }
+    } else {
+      activeDriverMarkerRef.current?.remove();
+      activeDriverMarkerRef.current = null;
+    }
+
+    if (activeRiderLocation) {
+      const nextLatLng = [activeRiderLocation.lat, activeRiderLocation.lng];
+      if (!riderMarkerRef.current) {
+        riderMarkerRef.current = L.marker(nextLatLng, {
+          icon: riderIcon(),
+          zIndexOffset: 650,
+        }).addTo(map);
+      } else {
+        riderMarkerRef.current.setLatLng(nextLatLng);
+      }
+    } else {
+      riderMarkerRef.current?.remove();
+      riderMarkerRef.current = null;
+    }
+
+    if (!centeredOnUserRef.current) {
+      const boundsPoints = [];
+      if (routePath?.length > 1) boundsPoints.push(...routePath);
+      if (!routePath?.length && fromCampus) boundsPoints.push([fromCampus.lat, fromCampus.lng]);
+      if (!routePath?.length && toCampus) boundsPoints.push([toCampus.lat, toCampus.lng]);
+      if (activeDriverLocation) boundsPoints.push([activeDriverLocation.lat, activeDriverLocation.lng]);
+      if (activeRiderLocation) boundsPoints.push([activeRiderLocation.lat, activeRiderLocation.lng]);
+
+      if (boundsPoints.length > 1) {
+        map.fitBounds(L.latLngBounds(boundsPoints), { padding: [36, 36] });
+        centeredOnUserRef.current = true;
+      }
+    }
+  }, [activeDriverLocation, activeRiderLocation, fromCampus, routePath, toCampus, traveledRoutePath]);
+
   const liveMapLabel =
     status === 'error' ? 'OSM map failed to load'
+    : routePath?.length > 1 ? 'Street route loaded'
     : locationStatus === 'ready' ? 'Live GPS connected'
     : locationStatus === 'requesting' ? 'Requesting GPS access'
     : locationStatus === 'denied' ? 'Location permission denied'

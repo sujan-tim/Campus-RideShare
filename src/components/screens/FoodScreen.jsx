@@ -3,6 +3,7 @@ import { Btn, Stars, Tag, BackBtn } from '../ui';
 import SecureCheckoutSheet from '../payments/SecureCheckoutSheet';
 import { C, FONTS, RADIUS, SHADOW } from '../../constants/theme';
 import { CAMPUSES, RESTAURANTS, MENU_ITEMS } from '../../constants/data';
+import { getPaymentMethodShortLabel, getPaymentMethodTitle } from '../../utils/payments';
 
 function MenuScreen({ restaurant, paymentMethod, onPaymentMethodSave, onBack }) {
   const [cart, setCart] = useState({});
@@ -75,7 +76,7 @@ function MenuScreen({ restaurant, paymentMethod, onPaymentMethodSave, onBack }) 
             <div>
               <p style={{ margin: '0 0 4px', fontSize: '12px', color: C.gray500 }}>Secure checkout</p>
               <p style={{ margin: 0, fontSize: '14px', color: C.gray800, fontWeight: '700' }}>
-                {paymentMethod ? `${paymentMethod.brand} ending in ${paymentMethod.last4}` : 'No saved payment method yet'}
+                {paymentMethod ? getPaymentMethodTitle(paymentMethod) : 'No saved payment method yet'}
               </p>
             </div>
             <span style={{ padding: '6px 10px', borderRadius: RADIUS.md, background: C.white, border: `1px solid ${C.gray200}`, fontSize: '11px', fontWeight: '700', color: C.gray600 }}>
@@ -160,7 +161,7 @@ export default function FoodScreen({ paymentMethod, onPaymentMethodSave }) {
         <div style={{ marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {[
             'Fast pickup windows',
-            paymentMethod ? `Saved ${paymentMethod.brand} •${paymentMethod.last4}` : 'Add a card during checkout',
+            paymentMethod ? `Saved ${getPaymentMethodShortLabel(paymentMethod)}` : 'Add Apple Pay, Google Pay, or card at checkout',
             'Secure checkout flow',
           ].map(item => (
             <span key={item} style={{ padding: '6px 10px', borderRadius: RADIUS.full, background: C.gray50, border: `1px solid ${C.gray100}`, fontSize: '11px', color: C.gray600, fontWeight: '700' }}>

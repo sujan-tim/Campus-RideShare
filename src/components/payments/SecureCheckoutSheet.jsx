@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Btn, Check, Sheet } from '../ui';
 import { C, FONTS, RADIUS, SHADOW } from '../../constants/theme';
+import { getPaymentMethodSubtitle, getPaymentMethodTitle, isWalletMethod } from '../../utils/payments';
 
 function formatCardNumber(value) {
   return value
@@ -22,6 +23,40 @@ function detectBrand(number) {
   if (/^3[47]/.test(number)) return 'AmEx';
   if (/^6/.test(number)) return 'Discover';
   return 'Card';
+}
+
+function paymentOptionMeta(option) {
+  return {
+    saved: { label: 'Saved method', icon: '💾' },
+    apple_pay: { label: 'Apple Pay', icon: 'AP' },
+    google_pay: { label: 'Google Pay', icon: 'G' },
+    card: { label: 'Debit / Credit Card', icon: '💳' },
+  }[option] || { label: 'Payment', icon: '💳' };
+}
+
+function buildWalletMethod(type) {
+  const wallet = type === 'apple_pay'
+    ? {
+        type: 'wallet',
+        walletType: 'apple_pay',
+        brand: 'Apple Pay',
+        displayName: 'Apple Pay',
+        cardholder: 'Device wallet',
+        walletEmail: 'Face ID / Touch ID device token',
+      }
+    : {
+        type: 'wallet',
+        walletType: 'google_pay',
+        brand: 'Google Pay',
+        displayName: 'Google Pay',
+        cardholder: 'Device wallet',
+        walletEmail: 'Google account device token',
+      };
+
+  return {
+    ...wallet,
+    token: `pm_demo_wallet_${Date.now().toString(36)}`,
+  };
 }
 
 function Field({ label, value, onChange, placeholder, maxLength, type = 'text', error }) {
@@ -65,7 +100,8 @@ export default function SecureCheckoutSheet({
   onSuccess,
   submitLabel = 'Pay Securely',
 }) {
-  const [useSavedMethod, setUseSavedMethod] = useState(Boolean(savedMethod));
+  const defaultOption = savedMethod ? 'saved' : 'apple_pay';
+  const [selectedOption, setSelectedOption] = useState(defaultOption);
   const [saveForFuture, setSaveForFuture] = useState(!savedMethod);
   const [processing, setProcessing] = useState(false);
   const [errors, setErrors] = useState({});
@@ -78,6 +114,9 @@ export default function SecureCheckoutSheet({
   });
 
   const brand = useMemo(() => detectBrand(form.cardNumber.replace(/\s/g, '')), [form.cardNumber]);
+  const usingSavedMethod = selectedOption === 'saved' && Boolean(savedMethod);
+  const usingWallet = selectedOption === 'apple_pay' || selectedOption === 'google_pay';
+  const requiresCardForm = selectedOption === 'card';
 
   const setField = (key, value) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -85,7 +124,7 @@ export default function SecureCheckoutSheet({
   };
 
   const validate = () => {
-    if (useSavedMethod && savedMethod) return {};
+    if (usingSavedMethod || usingWallet) return {};
 
     const nextErrors = {};
     const cardNumber = form.cardNumber.replace(/\s/g, '');
@@ -118,9 +157,12 @@ export default function SecureCheckoutSheet({
     setProcessing(true);
     setTimeout(() => {
       const cardNumber = form.cardNumber.replace(/\s/g, '');
-      const nextMethod = useSavedMethod && savedMethod
+      const nextMethod = usingSavedMethod
         ? savedMethod
+        : usingWallet
+        ? buildWalletMethod(selectedOption)
         : {
+            type: 'card',
             brand,
             last4: cardNumber.slice(-4),
             expiry: form.expiry,
@@ -128,7 +170,7 @@ export default function SecureCheckoutSheet({
             token: `pm_demo_${Date.now().toString(36)}`,
           };
 
-      if ((!useSavedMethod || !savedMethod) && saveForFuture) {
+      if (!usingSavedMethod && saveForFuture) {
         onSaveMethod?.(nextMethod);
       }
 
@@ -168,11 +210,11 @@ export default function SecureCheckoutSheet({
             <div style={{ width: '34px', height: '34px', borderRadius: '12px', background: C.white, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: SHADOW.sm }}>🔐</div>
             <div>
               <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '700', color: C.gray800 }}>Protected Checkout</p>
-              <p style={{ margin: 0, fontSize: '11px', color: C.gray500 }}>Encrypted card form with tokenized demo payment flow.</p>
+              <p style={{ margin: 0, fontSize: '11px', color: C.gray500 }}>Wallets keep card numbers hidden. Cards are stored only as masked demo tokens in this app.</p>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {['Card encrypted in browser', 'Saved method masked', 'Ready for backend processor'].map(item => (
+            {['Apple Pay demo ready', 'Google Pay demo ready', 'Processor-ready token model'].map(item => (
               <span key={item} style={{ padding: '4px 10px', borderRadius: RADIUS.full, background: C.white, border: `1px solid ${C.gray200}`, fontSize: '10px', color: C.gray600, fontWeight: '700' }}>
                 {item}
               </span>
@@ -180,18 +222,89 @@ export default function SecureCheckoutSheet({
           </div>
         </div>
 
+        <div style={{ marginBottom: '16px' }}>
+          <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.gray500, letterSpacing: '1px', textTransform: 'uppercase' }}>
+            Payment Method
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: savedMethod ? '1fr 1fr' : '1fr', gap: '10px' }}>
+            {[
+              savedMethod ? 'saved' : null,
+              'apple_pay',
+              'google_pay',
+              'card',
+            ].filter(Boolean).map(option => {
+              const meta = paymentOptionMeta(option);
+              const active = selectedOption === option;
+              return (
+                <button
+                  key={option}
+                  onClick={() => setSelectedOption(option)}
+                  type="button"
+                  style={{
+                    padding: '14px',
+                    borderRadius: RADIUS.lg,
+                    border: `1.5px solid ${active ? C.red : C.gray200}`,
+                    background: active ? C.redFaint : C.white,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    boxShadow: active ? SHADOW.sm : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: option === 'apple_pay' ? '18px' : '16px', fontWeight: option === 'google_pay' ? '900' : '700', color: C.gray800 }}>{meta.icon}</span>
+                    {active && <span style={{ fontSize: '11px', fontWeight: '700', color: C.red }}>Selected</span>}
+                  </div>
+                  <p style={{ margin: '0 0 3px', fontSize: '13px', fontWeight: '700', color: C.gray800 }}>
+                    {option === 'saved' ? getPaymentMethodTitle(savedMethod) : meta.label}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '11px', color: C.gray500, lineHeight: '1.5' }}>
+                    {option === 'saved' ? getPaymentMethodSubtitle(savedMethod) : option === 'card'
+                      ? 'Manual card entry with masked token storage'
+                      : 'Fast wallet authorization with tokenized checkout'}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {savedMethod && (
           <div style={{ marginBottom: '16px' }}>
             <Check
-              checked={useSavedMethod}
-              onChange={() => setUseSavedMethod(prev => !prev)}
-              label={`Use saved ${savedMethod.brand || 'card'} ending in ${savedMethod.last4}`}
-              sublabel={`${savedMethod.cardholder} · expires ${savedMethod.expiry}`}
+              checked={selectedOption === 'saved'}
+              onChange={() => setSelectedOption(prev => prev === 'saved' ? 'card' : 'saved')}
+              label={`Use ${getPaymentMethodTitle(savedMethod)}`}
+              sublabel={getPaymentMethodSubtitle(savedMethod)}
             />
           </div>
         )}
 
-        {(!useSavedMethod || !savedMethod) && (
+        {usingWallet && (
+          <div style={{ padding: '16px', background: C.white, border: `1px solid ${C.gray100}`, borderRadius: RADIUS.xl, boxShadow: SHADOW.sm, marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+              <div>
+                <p style={{ margin: '0 0 2px', fontSize: '12px', color: C.gray500 }}>Wallet checkout</p>
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: C.gray800 }}>
+                  {selectedOption === 'apple_pay' ? 'Apple Pay' : 'Google Pay'}
+                </p>
+              </div>
+              <span style={{ padding: '5px 10px', borderRadius: RADIUS.full, background: '#E8F8F0', color: C.success, fontSize: '11px', fontWeight: '700' }}>
+                Recommended
+              </span>
+            </div>
+            <p style={{ margin: '0 0 10px', fontSize: '12px', color: C.gray500, lineHeight: '1.6' }}>
+              Wallet payments keep the underlying card number hidden from the merchant UI and use a tokenized payment credential instead.
+            </p>
+            <Check
+              checked={saveForFuture}
+              onChange={() => setSaveForFuture(prev => !prev)}
+              label={`Save ${selectedOption === 'apple_pay' ? 'Apple Pay' : 'Google Pay'} as your default checkout method`}
+              sublabel="Stored as a wallet token for this demo app session"
+            />
+          </div>
+        )}
+
+        {requiresCardForm && (
           <>
             <Field
               label="Cardholder Name"
@@ -252,9 +365,17 @@ export default function SecureCheckoutSheet({
               checked={saveForFuture}
               onChange={() => setSaveForFuture(prev => !prev)}
               label="Save this card for faster checkout"
-              sublabel="Stored as a masked demo payment method in this app session"
+              sublabel="Stored only as a masked token in this demo app session"
             />
           </>
+        )}
+
+        {!requiresCardForm && !usingWallet && !usingSavedMethod && (
+          <div style={{ padding: '14px 16px', background: C.gray50, border: `1px solid ${C.gray100}`, borderRadius: RADIUS.xl, marginBottom: '16px' }}>
+            <p style={{ margin: 0, fontSize: '12px', color: C.gray500, lineHeight: '1.6' }}>
+              Choose a payment method above to continue.
+            </p>
+          </div>
         )}
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
@@ -262,7 +383,7 @@ export default function SecureCheckoutSheet({
             Cancel
           </Btn>
           <Btn onClick={handleSubmit} fullWidth={false} style={{ flex: 2 }} disabled={processing}>
-            {processing ? 'Authorizing…' : `${submitLabel} →`}
+            {processing ? 'Authorizing…' : `${usingWallet ? `Authorize ${paymentOptionMeta(selectedOption).label}` : submitLabel} →`}
           </Btn>
         </div>
       </div>

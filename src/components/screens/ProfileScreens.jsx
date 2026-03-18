@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Btn, Sheet, Stars } from '../ui';
 import SecureCheckoutSheet from '../payments/SecureCheckoutSheet';
 import { C, FONTS, RADIUS, SHADOW } from '../../constants/theme';
+import { getPaymentStorageLabel, getPaymentMethodSubtitle, getPaymentMethodTitle, isWalletMethod } from '../../utils/payments';
 
 function EmptyState({ icon, title, description, action, actionLabel }) {
   return (
@@ -329,7 +330,7 @@ export function ProfileScreen({
                 <div>
                   <p style={{ margin: '0 0 6px', fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>RUride Secure Gateway</p>
                   <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '800' }}>
-                    {paymentMethod ? `${paymentMethod.brand} ending in ${paymentMethod.last4}` : 'No payment method saved'}
+                    {paymentMethod ? getPaymentMethodTitle(paymentMethod) : 'No payment method saved'}
                   </h3>
                 </div>
                 <span style={{ padding: '6px 10px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: RADIUS.md, fontSize: '11px', fontWeight: '700' }}>
@@ -338,8 +339,12 @@ export function ProfileScreen({
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div style={{ padding: '12px', borderRadius: RADIUS.lg, background: 'rgba(255,255,255,0.06)' }}>
-                  <p style={{ margin: '0 0 3px', fontSize: '10px', color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Cardholder</p>
-                  <p style={{ margin: 0, fontSize: '14px', fontWeight: '700' }}>{paymentMethod?.cardholder || (user?.fullName || 'Add a card')}</p>
+                  <p style={{ margin: '0 0 3px', fontSize: '10px', color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                    {isWalletMethod(paymentMethod) ? 'Wallet' : 'Cardholder'}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '14px', fontWeight: '700' }}>
+                    {paymentMethod ? getPaymentMethodSubtitle(paymentMethod, user?.fullName || 'RUride user') : (user?.fullName || 'Add a payment method')}
+                  </p>
                 </div>
                 <div style={{ padding: '12px', borderRadius: RADIUS.lg, background: 'rgba(255,255,255,0.06)' }}>
                   <p style={{ margin: '0 0 3px', fontSize: '10px', color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Transactions</p>
@@ -349,8 +354,8 @@ export function ProfileScreen({
             </div>
             <div style={{ background: C.white, border: `1px solid ${C.gray100}`, borderRadius: RADIUS.xl, padding: '16px', marginBottom: '12px', boxShadow: SHADOW.sm }}>
               {[
-                ['Gateway status', 'Ready for checkout UI'],
-                ['Storage', paymentMethod ? `Masked ${paymentMethod.brand} token` : 'No saved token yet'],
+                ['Gateway status', 'Wallet and card checkout ready'],
+                ['Storage', getPaymentStorageLabel(paymentMethod)],
                 ['Coverage', 'Ride and food flows'],
               ].map(([label, value]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', paddingBottom: '10px', marginBottom: '10px', borderBottom: `1px solid ${C.gray100}` }}>
@@ -359,7 +364,7 @@ export function ProfileScreen({
                 </div>
               ))}
               <p style={{ margin: 0, fontSize: '12px', color: C.gray500, lineHeight: '1.6' }}>
-                This is a secure client-side gateway demo. To charge real cards, connect a backend processor such as Stripe or Adyen.
+                This is still a client-side demo. For real Apple Pay, Google Pay, and card charging, connect a processor such as Stripe or Adyen with server-side payment intents.
               </p>
             </div>
             <Btn onClick={() => setShowPaymentSheet(true)} size="lg">

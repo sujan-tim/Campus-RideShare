@@ -4,6 +4,8 @@ import { LiveMap, FallbackMap } from '../map/LiveMap';
 import SecureCheckoutSheet from '../payments/SecureCheckoutSheet';
 import { C, FONTS, RADIUS, SHADOW } from '../../constants/theme';
 import { CAMPUSES, MOCK_DRIVERS } from '../../constants/data';
+import { getPaymentMethodShortLabel } from '../../utils/payments';
+import { resolveCampusSpot } from '../../utils/navigation';
 import { formatStamp, makeId } from '../../utils/persistence';
 
 function CampusPill({ campus, selected, role, onClick }) {
@@ -214,6 +216,17 @@ function BookRideSheet({ onClose, onConfirm, preferredDriver, savedPlaces, userL
   const handleDriverConfirm = (driver) => {
     const pickupLabel = resolveLocationLabel(pickupPoint, pickupOptions, from?.name || 'Pickup');
     const dropoffLabel = resolveLocationLabel(dropoffPoint, dropoffOptions, to?.name || 'Destination');
+    const pickupLocation = resolveCampusSpot({
+      campus: from,
+      selectionValue: pickupPoint,
+      label: pickupLabel,
+      fallbackLocation: userLocation,
+    });
+    const dropoffLocation = resolveCampusSpot({
+      campus: to,
+      selectionValue: dropoffPoint,
+      label: dropoffLabel,
+    });
 
     if (saveFavorite) {
       onAddSavedPlace({
@@ -233,6 +246,12 @@ function BookRideSheet({ onClose, onConfirm, preferredDriver, savedPlaces, userL
       toCampus: to,
       pickupLabel,
       dropoffLabel,
+      pickupValue: pickupPoint,
+      dropoffValue: dropoffPoint,
+      pickupLocation,
+      dropoffLocation,
+      riderLocation: pickupLocation,
+      driverStartLocation: { lat: driver.lat, lng: driver.lng, label: `${driver.name} current location` },
       rideCode: makeId('trip').slice(-6).toUpperCase(),
       requestStatus: 'matching',
     });
@@ -520,7 +539,7 @@ export default function HomeScreen({
             {[
               ['Online', String(MOCK_DRIVERS.length)],
               ['Fare', '$5'],
-              ['Payment', paymentMethod ? `${paymentMethod.brand} •${paymentMethod.last4}` : 'Add card'],
+              ['Payment', paymentMethod ? getPaymentMethodShortLabel(paymentMethod) : 'Add payment'],
             ].map(([label, value]) => (
               <div key={label} style={{ padding: '10px 12px', borderRadius: RADIUS.lg, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <p style={{ margin: '0 0 3px', fontSize: '10px', color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{label}</p>

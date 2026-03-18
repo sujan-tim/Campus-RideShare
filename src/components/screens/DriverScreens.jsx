@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Btn, Sheet, Tag } from '../ui';
+import { Avatar, BackBtn, Btn, Sheet, Tag } from '../ui';
 import { LiveMap } from '../map/LiveMap';
 import { CAMPUSES } from '../../constants/data';
 import { C, FONTS, RADIUS, SHADOW } from '../../constants/theme';
+import { fetchShortestStreetRoute, getNavigationSnapshot, getRoutePointAtProgress, resolveCampusSpot, splitRouteGeometry } from '../../utils/navigation';
 import { formatStamp, makeId } from '../../utils/persistence';
 
 const TRIP_META = {
@@ -451,15 +452,35 @@ export function DriverEarningsScreen({ driverProfile, driverTripHistory, driverR
   );
 }
 
-export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket, onNotify }) {
+export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket, onNotify, onBack }) {
   const [status, setStatus] = useState(trip.liveStatus || 'heading_pickup');
   const [elapsed, setElapsed] = useState(0);
   const fromCampus = resolveCampus(trip.fromCampusId);
   const toCampus = resolveCampus(trip.toCampusId);
-  const [driverLoc, setDriverLoc] = useState(() => ({
-    lat: (fromCampus?.lat || 40.5008) + 0.012,
-    lng: (fromCampus?.lng || -74.4474) - 0.01,
-  }));
+  const pickupPoint = useMemo(() => (
+    trip.pickupLocation || resolveCampusSpot({
+      campus: fromCampus,
+      label: trip.pickupSpot || trip.from,
+    })
+  ), [fromCampus, trip.from, trip.pickupLocation, trip.pickupSpot]);
+  const dropoffPoint = useMemo(() => (
+    trip.dropoffLocation || resolveCampusSpot({
+      campus: toCampus,
+      label: trip.dropoffSpot || trip.to,
+    })
+  ), [toCampus, trip.dropoffLocation, trip.dropoffSpot, trip.to]);
+  const driverStart = useMemo(() => (
+    trip.driverStartLocation || {
+      lat: (pickupPoint?.lat || fromCampus?.lat || 40.5008) + 0.012,
+      lng: (pickupPoint?.lng || fromCampus?.lng || -74.4474) - 0.01,
+      label: 'Driver current location',
+    }
+  ), [fromCampus?.lat, fromCampus?.lng, pickupPoint?.lat, pickupPoint?.lng, trip.driverStartLocation]);
+  const [pickupRoute, setPickupRoute] = useState(null);
+  const [tripRoute, setTripRoute] = useState(null);
+  const [routeMode, setRouteMode] = useState('loading');
+  const [routeProgress, setRouteProgress] = useState(0);
+  const [driverLoc, setDriverLoc] = useState(() => ({ lat: driverStart.lat, lng: driverStart.lng }));
   const [showChat, setShowChat] = useState(false);
   const [showIssues, setShowIssues] = useState(false);
   const [draft, setDraft] = useState('');
@@ -467,6 +488,11 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
     { id: 'msg1', author: 'rider', text: `Hi! I’m at ${trip.pickupSpot}.`, time: 'Just now' },
   ]);
   const meta = TRIP_META[status];
+  const currentRoute = status === 'on_trip' ? tripRoute : pickupRoute;
+  const currentProgress = status === 'at_pickup' ? 1 : routeProgress;
+  const currentSplit = splitRouteGeometry(currentRoute, currentProgress);
+  const navigation = getNavigationSnapshot(currentRoute, currentProgress);
+  const routeStats = status === 'on_trip' ? tripRoute : pickupRoute;
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed(prev => prev + 1), 1000);
@@ -474,20 +500,70 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
   }, []);
 
   useEffect(() => {
-    if (status !== 'heading_pickup' && status !== 'on_trip') return undefined;
-    const target = status === 'heading_pickup'
-      ? { lat: fromCampus?.lat || 40.5008, lng: fromCampus?.lng || -74.4474 }
-      : { lat: toCampus?.lat || 40.5235, lng: toCampus?.lng || -74.4626 };
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function loadRoutes() {
+      if (!pickupPoint || !dropoffPoint) return;
+      setRouteMode('loading');
+      const [pickupResult, tripResult] = await Promise.all([
+        fetchShortestStreetRoute({ origin: driverStart, destination: pickupPoint, signal: controller.signal }),
+        fetchShortestStreetRoute({ origin: pickupPoint, destination: dropoffPoint, signal: controller.signal }),
+      ]);
+
+      if (cancelled) return;
+
+      setPickupRoute(pickupResult);
+      setTripRoute(tripResult);
+      setDriverLoc({ lat: driverStart.lat, lng: driverStart.lng });
+      setRouteMode(pickupResult?.source === 'osrm' && tripResult?.source === 'osrm' ? 'street' : 'fallback');
+    }
+
+    loadRoutes();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [driverStart, dropoffPoint, pickupPoint]);
+
+  useEffect(() => {
+    if (status !== 'heading_pickup' || !pickupRoute?.geometry?.length) return undefined;
+    const steps = Math.max(18, Math.min(48, Math.round((pickupRoute.distanceMeters || 1400) / 70)));
+    let frame = 0;
+    setRouteProgress(0);
+    setDriverLoc(getRoutePointAtProgress(pickupRoute, 0) || { lat: driverStart.lat, lng: driverStart.lng });
 
     const timer = setInterval(() => {
-      setDriverLoc(prev => ({
-        lat: prev.lat + (target.lat - prev.lat) * 0.1,
-        lng: prev.lng + (target.lng - prev.lng) * 0.1,
-      }));
-    }, 1600);
+      frame += 1;
+      const nextProgress = Math.min(1, frame / steps);
+      const nextPoint = getRoutePointAtProgress(pickupRoute, nextProgress);
+      setRouteProgress(nextProgress);
+      if (nextPoint) setDriverLoc(nextPoint);
+      if (nextProgress >= 1) clearInterval(timer);
+    }, 900);
 
     return () => clearInterval(timer);
-  }, [fromCampus?.lat, fromCampus?.lng, status, toCampus?.lat, toCampus?.lng]);
+  }, [driverStart.lat, driverStart.lng, pickupRoute, status]);
+
+  useEffect(() => {
+    if (status !== 'on_trip' || !tripRoute?.geometry?.length) return undefined;
+    const steps = Math.max(20, Math.min(58, Math.round((tripRoute.distanceMeters || 1500) / 80)));
+    let frame = 0;
+    setRouteProgress(0);
+    setDriverLoc(getRoutePointAtProgress(tripRoute, 0) || pickupPoint || { lat: driverStart.lat, lng: driverStart.lng });
+
+    const timer = setInterval(() => {
+      frame += 1;
+      const nextProgress = Math.min(1, frame / steps);
+      const nextPoint = getRoutePointAtProgress(tripRoute, nextProgress);
+      setRouteProgress(nextProgress);
+      if (nextPoint) setDriverLoc(nextPoint);
+      if (nextProgress >= 1) clearInterval(timer);
+    }, 900);
+
+    return () => clearInterval(timer);
+  }, [driverStart.lat, driverStart.lng, pickupPoint, status, tripRoute]);
 
   const handleCall = () => {
     onNotify?.('Calling rider', `Attempting to call ${trip.rider}.`, 'info');
@@ -510,6 +586,8 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
     heading_pickup: {
       label: 'Mark Arrived at Pickup',
       onClick: () => {
+        setRouteProgress(1);
+        if (pickupPoint) setDriverLoc({ lat: pickupPoint.lat, lng: pickupPoint.lng });
         setStatus('at_pickup');
         onNotify?.('Pickup reached', `You arrived for ${trip.rider}.`, 'success');
       },
@@ -517,6 +595,8 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
     at_pickup: {
       label: 'Start Trip',
       onClick: () => {
+        setRouteProgress(0);
+        if (pickupPoint) setDriverLoc({ lat: pickupPoint.lat, lng: pickupPoint.lng });
         setStatus('on_trip');
         onNotify?.('Trip started', `${trip.rider} is on board.`, 'success');
       },
@@ -531,6 +611,10 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
           payout: parseFare(trip.fare),
           elapsed,
           liveStatus: 'complete',
+          pickupLocation: pickupPoint,
+          dropoffLocation: dropoffPoint,
+          routedDistance: tripRoute?.distanceLabel || routeStats?.distanceLabel || trip.distance,
+          routedDuration: tripRoute?.durationLabel || routeStats?.durationLabel || trip.eta,
         }), 400);
       },
     },
@@ -559,7 +643,10 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
         <LiveMap
           fromCampus={fromCampus}
           toCampus={toCampus}
+          routePath={currentSplit.remaining}
+          traveledRoutePath={currentSplit.traveled}
           activeDriverLocation={driverLoc}
+          activeRiderLocation={status === 'heading_pickup' || status === 'at_pickup' ? pickupPoint : driverLoc}
           showCampuses
           showDrivers={false}
           showMyLocation={false}
@@ -567,12 +654,15 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
           height={280}
         />
         <div style={{ position: 'absolute', top: '12px', left: '12px', right: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 14px', background: 'rgba(255,255,255,0.95)', borderRadius: RADIUS.full, boxShadow: SHADOW.md, border: `1px solid ${meta.color}30` }}>
-            <span style={{ fontSize: '13px' }}>{meta.icon}</span>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: meta.color }}>{meta.label}</span>
-          </div>
-          <div style={{ padding: '7px 12px', background: 'rgba(255,255,255,0.95)', borderRadius: RADIUS.full, boxShadow: SHADOW.md, fontSize: '12px', fontWeight: '700', color: C.gray700, fontFamily: FONTS.mono }}>
-            {`${Math.floor(elapsed / 60).toString().padStart(2, '0')}:${(elapsed % 60).toString().padStart(2, '0')}`}
+          <BackBtn onClick={onBack}/>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 14px', background: 'rgba(255,255,255,0.95)', borderRadius: RADIUS.full, boxShadow: SHADOW.md, border: `1px solid ${meta.color}30` }}>
+              <span style={{ fontSize: '13px' }}>{meta.icon}</span>
+              <span style={{ fontSize: '12px', fontWeight: '700', color: meta.color }}>{meta.label}</span>
+            </div>
+            <div style={{ padding: '7px 12px', background: 'rgba(255,255,255,0.95)', borderRadius: RADIUS.full, boxShadow: SHADOW.md, fontSize: '12px', fontWeight: '700', color: C.gray700, fontFamily: FONTS.mono }}>
+              {`${Math.floor(elapsed / 60).toString().padStart(2, '0')}:${(elapsed % 60).toString().padStart(2, '0')}`}
+            </div>
           </div>
         </div>
       </div>
@@ -599,7 +689,7 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
           {[
             ['Pickup', trip.pickupSpot],
             ['Drop-off', trip.dropoffSpot],
-            ['Distance', trip.distance || 'Campus route'],
+            ['Street route', routeStats ? `${routeStats.distanceLabel} · ${routeStats.durationLabel}` : 'Loading route…'],
             ['Rider note', trip.note || 'No special instructions'],
           ].map(([label, value], index, items) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '13px 16px', borderBottom: index < items.length - 1 ? `1px solid ${C.gray100}` : 'none' }}>
@@ -617,11 +707,16 @@ export function ActiveDriverTripScreen({ trip, onComplete, onCreateSupportTicket
         <div style={{ padding: '14px 16px', background: C.gray50, border: `1px solid ${C.gray100}`, borderRadius: RADIUS.xl, marginBottom: '16px' }}>
           <p style={{ margin: '0 0 5px', fontSize: '12px', color: C.gray500 }}>Live trip guidance</p>
           <p style={{ margin: 0, fontSize: '13px', color: C.gray700, lineHeight: '1.6' }}>
-            {status === 'heading_pickup' && `Navigate to ${trip.pickupSpot} and confirm arrival when the rider is in sight.`}
+            {status === 'heading_pickup' && `Navigate to ${trip.pickupSpot} on the ${routeMode === 'street' ? 'shortest street route' : 'fallback route'}. Next: ${navigation.instruction}.`}
             {status === 'at_pickup' && `You are at pickup. Confirm the rider and begin the trip when everyone is ready.`}
-            {status === 'on_trip' && `Head to ${trip.dropoffSpot} and complete the trip when the rider has exited.`}
+            {status === 'on_trip' && `Head to ${trip.dropoffSpot}. Next: ${navigation.instruction}.`}
             {status === 'complete' && 'Finalizing payout and saving the trip to your driver history.'}
           </p>
+          {status !== 'complete' && (
+            <p style={{ margin: '8px 0 0', fontSize: '12px', color: C.gray500 }}>
+              Remaining {navigation.remainingDistance} · {navigation.remainingDuration}
+            </p>
+          )}
         </div>
 
         <Btn onClick={nextAction?.onClick} disabled={!nextAction} size="lg">

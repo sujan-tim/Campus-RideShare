@@ -158,6 +158,11 @@ export function BottomNav({ active, onChange, role = 'rider' }) {
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>
       </svg>
     )},
+    { id: 'buses', label: 'Buses', icon: (on) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={on ? C.red : C.gray400} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 17V5a2 2 0 012-2h8a2 2 0 012 2v12"/><path d="M6 10h12"/><path d="M8 21v-2M16 21v-2"/><path d="M7.5 14h.01M16.5 14h.01"/><path d="M4 17h16v2a1 1 0 01-1 1H5a1 1 0 01-1-1z"/>
+      </svg>
+    )},
     { id: 'food', label: 'Eats', icon: (on) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={on ? C.red : C.gray400} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
