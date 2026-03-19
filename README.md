@@ -16,6 +16,18 @@ npm run dev
 
 ---
 
+## 📦 Store Release Kit
+
+Store submission drafts and checklists live in `docs/store/`:
+
+- `docs/store/ios-app-store-metadata.md`
+- `docs/store/google-play-metadata.md`
+- `docs/store/privacy-policy-checklist.md`
+- `docs/store/screenshots-checklist.md`
+- `docs/store/release-commands.md`
+
+---
+
 ## 🗺️ OpenStreetMap + GPS
 
 The app now uses:

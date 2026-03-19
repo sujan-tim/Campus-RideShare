@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RUride</string>
+    <string name="title_activity_main">RUride</string>
+    <string name="package_name">com.ruride.app</string>
+    <string name="custom_url_scheme">ruride</string>
+</resources>

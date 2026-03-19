@@ -1,0 +1,6 @@
+{
+  "appId": "com.ruride.app",
+  "appName": "RUride",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
